@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>雷蛇鼠标控制台</title>
+<style>
+  :root{
+    --bg:#14161a; --panel:#1c1f25; --panel2:#22262e; --line:#2e333d;
+    --txt:#e6e8ec; --dim:#8b93a1; --accent:#44d17a; --accent2:#3b82f6; --danger:#ef4444;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+       font:14px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;}
+  .wrap{max-width:1000px;margin:0 auto;padding:24px 20px 60px}
+  header{display:flex;align-items:center;gap:14px;margin-bottom:22px;flex-wrap:wrap}
+  h1{font-size:19px;margin:0;font-weight:600;letter-spacing:.3px}
+  .badge{background:var(--panel2);border:1px solid var(--line);color:var(--dim);
+         padding:2px 9px;border-radius:20px;font-size:12px}
+  .live{color:var(--accent);border-color:rgba(68,209,122,.35)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+        padding:18px 20px;margin-bottom:16px}
+  .card h2{font-size:14px;margin:0 0 14px;font-weight:600;color:var(--dim);
+           text-transform:uppercase;letter-spacing:.8px}
+  .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .row+.row{margin-top:12px}
+  .label{color:var(--dim);min-width:72px;font-size:13px}
+  input[type=number],input[type=text],select{
+    background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+    border-radius:8px;padding:7px 10px;font:inherit;outline:none}
+  input[type=number]{width:92px}
+  input[type=text]{width:150px}
+  select{min-width:190px;cursor:pointer}
+  input:focus,select:focus{border-color:var(--accent2)}
+  input[type=range]{flex:1;min-width:200px;accent-color:var(--accent)}
+  input[type=color]{width:44px;height:34px;padding:2px;background:var(--panel2);
+                    border:1px solid var(--line);border-radius:8px;cursor:pointer}
+  button{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+         border-radius:8px;padding:7px 15px;font:inherit;cursor:pointer;transition:.15s}
+  button:hover{border-color:#3d4452;background:#282d36}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#0d1a12;font-weight:600}
+  button.primary:hover{filter:brightness(1.08)}
+  button.on{border-color:var(--accent);color:var(--accent)}
+  .seg{display:flex;gap:8px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .stage{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px}
+  .stage.active{border-color:var(--accent);box-shadow:0 0 0 1px rgba(68,209,122,.25) inset}
+  .stage .n{font-size:11px;color:var(--dim);margin-bottom:6px;display:flex;justify-content:space-between}
+  .stage input{width:100%;margin-top:6px}
+  .btnrow{display:grid;grid-template-columns:110px 1fr auto;gap:10px;align-items:center;
+          padding:9px 0;border-bottom:1px solid var(--line)}
+  .btnrow:last-child{border-bottom:none}
+  .btnname{font-weight:500}
+  .hint{color:var(--dim);font-size:12px;margin-top:10px;line-height:1.7}
+  .toast{position:fixed;right:22px;bottom:22px;background:var(--panel2);
+         border:1px solid var(--line);border-left:3px solid var(--accent);
+         padding:11px 16px;border-radius:8px;opacity:0;transform:translateY(8px);
+         transition:.25s;pointer-events:none;font-size:13px;max-width:340px}
+  .toast.show{opacity:1;transform:none}
+  .toast.err{border-left-color:var(--danger)}
+  code{background:var(--panel2);padding:1px 6px;border-radius:5px;font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>雷蛇鼠标控制台</h1>
+    <span class="badge live" id="devBadge">连接中…</span>
+    <span class="badge" id="fwBadge"></span>
+    <span class="badge" id="snBadge"></span>
+    <button style="margin-left:auto" onclick="load()">刷新</button>
+  </header>
+
+  <div class="card">
+    <h2>灵敏度 DPI</h2>
+    <div class="row">
+      <span class="label">当前</span>
+      <input type="range" id="dpiRange" min="100" max="6400" step="50" value="1600">
+      <input type="number" id="dpiVal" min="100" max="6400" step="50" value="1600">
+      <button class="primary" onclick="applyDpi()">应用</button>
+    </div>
+    <div class="row">
+      <span class="label">X / Y 分开</span>
+      <input type="number" id="dpiX" min="100" max="6400" step="50" placeholder="X">
+      <input type="number" id="dpiY" min="100" max="6400" step="50" placeholder="Y">
+      <span class="hint" style="margin:0">留空则 X=Y</span>
+    </div>
+    <div class="row" style="margin-top:16px">
+      <span class="label">档位</span>
+      <span class="hint" style="margin:0">点数字框改 DPI，点「设为当前」切换活动档</span>
+    </div>
+    <div class="grid" id="stageGrid" style="margin-top:10px"></div>
+  </div>
+
+  <div class="card">
+    <h2>回报率</h2>
+    <div class="row">
+      <div class="seg" id="pollSeg">
+        <button data-hz="125" onclick="setPoll(125)">125 Hz</button>
+        <button data-hz="500" onclick="setPoll(500)">500 Hz</button>
+        <button data-hz="1000" onclick="setPoll(1000)">1000 Hz</button>
+      </div>
+    </div>
+    <div class="hint">回报率越高延迟越低，但更吃 CPU。办公 500、游戏 1000 比较常见。</div>
+  </div>
+
+  <div class="card">
+    <h2>按键映射</h2>
+    <div id="btnList"></div>
+    <div class="row" style="margin-top:14px">
+      <span class="label">自定义</span>
+      <input type="text" id="customKey" placeholder="如 ctrl+shift+t / f13">
+      <select id="customTarget" style="min-width:130px"></select>
+      <button onclick="applyCustom()">应用到该键</button>
+    </div>
+    <div class="hint">
+      映射直接写入鼠标固件，<b>断电保留、换电脑也生效</b>，不需要任何后台软件。<br>
+      「默认」= 该按键原本的功能；「禁用」= 按下无任何反应。
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>灯光亮度</h2>
+    <div class="row">
+      <span class="label">亮度</span>
+      <input type="range" id="ledBri" min="0" max="255" step="1" value="255">
+      <input type="number" id="ledBriVal" min="0" max="255" step="1" value="255">
+      <button class="primary" onclick="applyLed()">应用</button>
+    </div>
+    <div class="row">
+      <span class="label">效果</span>
+      <select id="ledEffect" style="min-width:150px">
+        <option value="1">常亮</option>
+        <option value="2">呼吸</option>
+      </select>
+      <button onclick="ledOff()">关闭灯光</button>
+    </div>
+    <div class="hint">这个型号只有单色 logo 灯，没有颜色可选。亮度是独立通道（0-255），<b>读不回来</b>，所以滑块每次从 255 开始。</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let S = null;
+const $ = id => document.getElementById(id);
+
+function toast(msg, err){
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (err ? ' err' : '');
+  clearTimeout(t._t);
+  t._t = setTimeout(()=> t.className = 'toast', 2600);
+}
+
+async function api(path, body){
+  const r = await fetch(path, body
+      ? {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)}
+      : {});
+  return r.json();
+}
+
+async function load(){
+  try{
+    const s = await api('/api/state');
+    if(!s.ok) throw new Error(s.error || '鼠标未找到');
+    S = s;
+    $('devBadge').textContent = s.device.model;
+    $('devBadge').className = 'badge live';
+    $('fwBadge').textContent = '固件 ' + s.device.firmware;
+    $('snBadge').textContent = s.device.serial;
+  }catch(e){
+    S = DEMO;
+    $('devBadge').textContent = '预览模式（后端未启动）';
+    $('devBadge').className = 'badge';
+    $('fwBadge').textContent = '固件 1.0';
+    $('snBadge').textContent = '双击 razerui.cmd 连接真机';
+  }
+  renderDpi(); renderStages(); renderPoll(); renderButtons(); renderLed();
+}
+
+const DEMO = {
+  ok:true,
+  device:{model:'Razer DeathAdder Essential', firmware:'1.0', serial:'XXXXXXXXXXXX'},
+  dpi:{x:1600,y:1600},
+  stages:{active:3, list:[[400,400],[800,800],[1600,1600],[3200,3200],[6400,6400]]},
+  polling:500,
+  lighting:{effect:1},
+  buttons:{
+    '5':{name:'前侧键', spec:'ctrl+c', label:'复制', raw:[2,2,1,6,0,0,0]},
+    '4':{name:'后侧键', spec:'ctrl+v', label:'粘贴', raw:[2,2,1,25,0,0,0]},
+    '3':{name:'中键', spec:'default', label:'默认', raw:[1,1,3,0,0,0,0]},
+    '9':{name:'DPI 键', spec:'default', label:'默认', raw:[1,1,9,0,0,0,0]},
+    '10':{name:'配置键', spec:'default', label:'默认', raw:[1,1,10,0,0,0,0]},
+    '1':{name:'左键', spec:'default', label:'默认', raw:[1,1,1,0,0,0,0]},
+    '2':{name:'右键', spec:'default', label:'默认', raw:[1,1,2,0,0,0,0]}
+  }
+};
+
+function renderDpi(){
+  $('dpiRange').value = S.dpi.x;
+  $('dpiVal').value = S.dpi.x;
+  $('dpiX').value = '';
+  $('dpiY').value = '';
+}
+
+async function applyDpi(){
+  const x = parseInt($('dpiX').value) || parseInt($('dpiVal').value);
+  const y = parseInt($('dpiY').value) || x;
+  const r = await api('/api/dpi', {x, y});
+  if(r.ok){ toast(`DPI 已写入 ${r.dpi.x} × ${r.dpi.y}`); load(); }
+  else toast('写入失败', true);
+}
+
+$('dpiRange').oninput = e => $('dpiVal').value = e.target.value;
+
+function renderStages(){
+  const g = $('stageGrid'); g.innerHTML = '';
+  S.stages.list.forEach((st, i) => {
+    const idx = i + 1;
+    const d = document.createElement('div');
+    d.className = 'stage' + (idx === S.stages.active ? ' active' : '');
+    d.innerHTML = `<div class="n"><span>档位 ${idx}</span>
+        <span>${idx === S.stages.active ? '当前' : ''}</span></div>
+      <input type="number" min="100" max="6400" step="50" value="${st[0]}">
+      <button style="width:100%;margin-top:8px" onclick="setActive(${idx})">设为当前</button>`;
+    d.querySelector('input').onchange = e => updateStage(idx, parseInt(e.target.value));
+    g.appendChild(d);
+  });
+}
+
+async function updateStage(idx, val){
+  const stages = S.stages.list.map(s => [s[0], s[1]]);
+  stages[idx-1] = [val, val];
+  const r = await api('/api/stages', {stages, active: S.stages.active});
+  if(r.ok){ toast(`档位 ${idx} 已设为 ${val}`); load(); } else toast('写入失败', true);
+}
+
+async function setActive(idx){
+  const stages = S.stages.list.map(s => [s[0], s[1]]);
+  const r = await api('/api/stages', {stages, active: idx});
+  if(r.ok){ toast(`已切换到档位 ${idx}`); load(); } else toast('切换失败', true);
+}
+
+function renderPoll(){
+  document.querySelectorAll('#pollSeg button').forEach(b => {
+    b.classList.toggle('on', parseInt(b.dataset.hz) === S.polling);
+  });
+}
+
+async function setPoll(hz){
+  const r = await api('/api/polling', {hz});
+  if(r.ok){ toast(`回报率已设为 ${hz} Hz`); load(); } else toast('设置失败', true);
+}
+
+const PRESETS = [
+  ['default','默认（原功能）'], ['disabled','禁用'],
+  ['ctrl+c','复制 Ctrl+C'], ['ctrl+v','粘贴 Ctrl+V'], ['ctrl+x','剪切 Ctrl+X'],
+  ['ctrl+z','撤销 Ctrl+Z'], ['ctrl+y','重做 Ctrl+Y'], ['ctrl+s','保存 Ctrl+S'],
+  ['ctrl+a','全选 Ctrl+A'], ['ctrl+f','查找 Ctrl+F'], ['ctrl+t','新标签 Ctrl+T'],
+  ['ctrl+w','关标签 Ctrl+W'], ['ctrl+shift+t','恢复标签'],
+  ['enter','回车'], ['esc','Esc'], ['tab','Tab'], ['space','空格'], ['backspace','退格'],
+  ['volume_up','音量 +'], ['volume_down','音量 -'], ['mute','静音'], ['play','播放/暂停'],
+  ['mouse:4','鼠标：后退'], ['mouse:5','鼠标：前进'],
+];
+
+function renderButtons(){
+  const list = $('btnList'); list.innerHTML = '';
+  const sel = $('customTarget'); sel.innerHTML = '';
+  Object.entries(S.buttons).forEach(([id, b]) => {
+    const row = document.createElement('div');
+    row.className = 'btnrow';
+    const opts = PRESETS.map(([v, t]) =>
+      `<option value="${v}" ${v === b.spec ? 'selected' : ''}>${t}</option>`).join('');
+    const isCustom = !PRESETS.some(p => p[0] === b.spec);
+    row.innerHTML = `<div class="btnname">${b.name}</div>
+      <select>${opts}${isCustom ? `<option value="${b.spec}" selected>自定义：${b.spec}</option>` : ''}</select>
+      <span class="hint" style="margin:0">${b.label}</span>`;
+    row.querySelector('select').onchange = e => setButton(id, e.target.value);
+    list.appendChild(row);
+    sel.insertAdjacentHTML('beforeend', `<option value="${id}">${b.name}</option>`);
+  });
+}
+
+async function setButton(id, spec){
+  const r = await api('/api/button', {button: parseInt(id), spec});
+  if(r.ok){ toast(`${S.buttons[id].name} → ${r.label}`); load(); }
+  else toast('写入失败', true);
+}
+
+async function applyCustom(){
+  const target = $('customTarget').value;
+  const key = $('customKey').value.trim();
+  if(!key){ toast('请输入组合键，例如 ctrl+shift+t', true); return; }
+  await setButton(target, key);
+}
+
+function renderLed(){
+  const l = S.lighting || {};
+  $('ledEffect').value = String(l.effect ?? 1);
+  // 亮度不可读回，保持滑块当前值
+}
+
+$('ledBri').oninput = e => $('ledBriVal').value = e.target.value;
+
+async function ledOff(){
+  const res = await api('/api/lighting', {effect: 1, brightness: 0});
+  toast(res.ok ? '灯光已关闭' : '关闭失败', !res.ok);
+  if(res.ok) $('ledBriVal').value = 0, $('ledBri').value = 0;
+}
+
+async function applyLed(){
+  const bri = parseInt($('ledBriVal').value);
+  const res = await api('/api/lighting', {effect: parseInt($('ledEffect').value), brightness: bri});
+  if(res.ok){
+    toast(`亮度已写入 ${res.brightness ?? bri}`);
+    load();
+  } else toast('灯效写入失败', true);
+}
+
+load();
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+# 本地生成 / 运行产物
+__pycache__/
+*.py[cod]
+*.log
+
+# 设备状态备份（含个人设备信息，不要提交）
+mapbtn_backup.json
+razer_autostart_backup.json
+rate_report.txt
+
+# 便携运行时（体积大，按需自行下载）
+portable/
+
+# 探测脚本与原始日志（开发期产物，含设备序列号等）
+archive/
+*.tmp
